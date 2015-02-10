@@ -2,6 +2,7 @@
 Simple execution engine for testing SDP data flow with GPUs
 
 Requires MPI (any).
+Requires pthreads
 
 *Build*
 Make sure mpic++ is in your path and invoke 'make'

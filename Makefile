@@ -7,4 +7,4 @@ client: client.cpp
 	mpic++ -o client client.cpp
 
 EEngine: EEngine.cpp
-	mpic++ -o EEngine EEngine.cpp
+	mpic++ -o EEngine EEngine.cpp -pthread
