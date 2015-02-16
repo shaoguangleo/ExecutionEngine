@@ -3,9 +3,12 @@ Simple execution engine for testing SDP data flow with GPUs
 
 Requires MPI (any).
 Requires pthreads
+Requires GPUDegrid
 
 *Build*
-Make sure mpic++ is in your path and invoke 'make'
+This now requires code from GPUDegrid. In the build directory invoke
+%> git clone https://github.com/SKA-ScienceDataProcessor/GPUDegrid
+Then, make sure mpic++ is in your path and invoke 'make'
 
 *Run*
 Use mpirun with 3 ranks
