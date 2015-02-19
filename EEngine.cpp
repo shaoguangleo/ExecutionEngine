@@ -71,6 +71,11 @@ typedef struct {
    size_t size;
    void* data;
    int on_rank;
+   void display() {
+      rankprintf("Token %d: %s\nsize = %d. On rank %d\n", tid, 
+                     token_type==TOKEN_VIS ? "Visibility" : "Image", 
+                     size, on_rank);
+   }
 } token;
 
 void throw_error(const char* txt) {
@@ -111,7 +116,7 @@ token* token_list[256];
 
 int PAD(const int in) {
    int pad_size = 128/sizeof(PRECISION2);
-   int padded_npoints = ((in + pad_size - 1) / pad_size) * pad_size;
+   return ((in + pad_size - 1) / pad_size) * pad_size;
 }
 
 template <class CmplxType>
@@ -130,82 +135,103 @@ void init_gcf(CmplxType *gcf, size_t size) {
      }
 
 }
-void* exec_task(void* data_in) {
-   int* data = (int*) data_in;
-   rankprintf("Beginning task %d on token %d. Setting status to BUSY.\n", data[0], data[1]);
+const char* task_name(int task_in) {
+   switch (task_in) {
+     case (TASK_STATUS): return "TASK_STATUS";
+     case (TASK_DEGRID): return "TASK_DEGRID";
+     case (TASK_SENDTOK): return "TASK_SENDTOK";
+     case (TASK_RECVTOK): return "TASK_RECVTOK";
+     case (TASK_KILLTOK): return "TASK_KILLTOK";
+     case (TASK_GENVIS): return "TASK_GENVIS";
+     case (TASK_GENIMG): return "TASK_GENIMG";
+   };
+}
+void* exec_task(void* msg_in) {
+   int* msg = (int*) msg_in;
+   rankprintf("Beginning task %s on token %d. Setting status to BUSY.\n", task_name(msg[0]), msg[1]);
 
    //Change status to IDLE
    pthread_mutex_lock(&lock);
    node_status = STATUS_BUSY;
    pthread_mutex_unlock(&lock);
 
-   if (TASK_GENVIS == data[0]) {
+   if (TASK_GENVIS == msg[0]) {
       //Generate some visibilities
       //This won't be needed long term
-      // data[0] : task type
-      // data[1] : tokenid;
-      // data[2] : size
+      // msg[0] : task type
+      // msg[1] : tokenid;
+      // msg[2] : size
       int next_tok=0;
       while(token_list[next_tok] != 0 && next_tok < 256) next_tok++;
       if(next_tok>=256) throw_error("Too many tokens\n");
       token_list[next_tok] = new token;
-      token_list[next_tok]->tid = data[1];
+      token_list[next_tok]->tid = msg[1];
       token_list[next_tok]->token_type = TOKEN_VIS;
-      int npts = data[2];
+      int npts = msg[2];
       token_list[next_tok]->size = npts;
       //TODO padding for degrid
-      token_list[next_tok]->data = malloc(sizeof(PRECISION2)*2*PAD(NPOINTS)); //in and out
+      token_list[next_tok]->data = malloc(sizeof(PRECISION2)*(PAD(npts)+npts)); //in and out
       token_list[next_tok]->on_rank = rank;
+  
+      PRECISION2* vis = (PRECISION2*)token_list[next_tok]->data;
+      vis += PAD(npts);
       //Random visibilities
-      for(size_t n=0; n<npts;n++) {
-         ((PRECISION2*)data)[n].x = ((float)rand())/RAND_MAX*1000;
-         ((PRECISION2*)data)[n].y = ((float)rand())/RAND_MAX*1000;
+      for(int n=0; n<npts;n++) {
+         vis[n].x = ((float)rand())/RAND_MAX*1000;
+         vis[n].y = ((float)rand())/RAND_MAX*1000;
       }
-      sleep(4); //TODO remove
-   } else if (TASK_GENIMG == data[0]) {
+   } else if (TASK_GENIMG == msg[0]) {
       //Generate an image
       //This won't be needed long term
-      // data[0] : task type
-      // data[1] : tokenid
-      // data[2] : size
+      // msg[0] : task type
+      // msg[1] : tokenid
+      // msg[2] : size
       int next_tok=0;
       while(token_list[next_tok] != 0 && next_tok < 256) next_tok++;
       if(next_tok>=256) throw_error("Too many tokens\n");
       token_list[next_tok] = new token;
-      token_list[next_tok]->tid = data[1];
-      token_list[next_tok]->token_type = TOKEN_VIS;
-      int img_dim = data[2];
+      token_list[next_tok]->tid = msg[1];
+      token_list[next_tok]->token_type = TOKEN_IMG;
+      int img_dim = msg[2];
       token_list[next_tok]->size = img_dim;
       //TODO padding for degrid
       token_list[next_tok]->data = malloc(sizeof(PRECISION2)*img_dim*img_dim); //out and in 
       token_list[next_tok]->on_rank = rank;
-      //Random visibilities
-      for(size_t x=0; x<img_dim;x++)
-      for(size_t y=0; y<img_dim;y++) {
-         ((PRECISION2*)data)[x+img_dim*y].x = exp(-((x-1400.0)*(x-1400.0)+(y-3800.0)*(y-3800.0))/8000000.0)+1.0;
-         ((PRECISION2*)data)[x+img_dim*y].y = 0.4;
+
+      PRECISION2* img = (PRECISION2*)token_list[next_tok]->data;
+      //Some image
+      for(int x=0; x<img_dim;x++)
+      for(int y=0; y<img_dim;y++) {
+         img[x+img_dim*y].x = exp(-((x-1400.0)*(x-1400.0)+(y-3800.0)*(y-3800.0))/8000000.0)+1.0;
+         img[x+img_dim*y].y = 0.4;
       }
-      sleep(4); //TODO remove
       
-   } else if (TASK_KILLTOK == data[0]) {
-      free(token_list[data[0]]->data);
-      delete token_list[data[0]];
-      token_list[data[0]] = NULL;
-   } else if (TASK_DEGRID == data[0]) {
+   } else if (TASK_KILLTOK == msg[0]) {
+      free(token_list[msg[0]]->data);
+      delete token_list[msg[0]];
+      token_list[msg[0]] = NULL;
+   } else if (TASK_DEGRID == msg[0]) {
       // Degrid
-      // data[1] : visibility tokenid
-      // data[2] : image tokenid 
+      // msg[1] : visibility tokenid
+      // msg[2] : image tokenid 
       int vistok=0, imgtok=0;
-      while(token_list[vistok]->tid == data[1]) vistok++;
-      while(token_list[imgtok]->tid == data[2]) imgtok++;
+      while(token_list[vistok]->tid != msg[1]) vistok++;
+      if (token_list[vistok]->token_type != TOKEN_VIS) 
+                throw_error("First token passed to degrid "
+                            "does not contain visibilities");
+      while(token_list[imgtok]->tid != msg[2]) imgtok++;
+      if (token_list[imgtok]->token_type != TOKEN_IMG) 
+                throw_error("Second token passed to degrid "
+                            "is not an image");
+
       
       int img_size = token_list[imgtok]->size;
       PRECISION2* img = (PRECISION2*) token_list[imgtok]->data;
       int npts = token_list[vistok]->size;
       PRECISION2* out = (PRECISION2*) token_list[vistok]->data;
-      PRECISION2* in = out + npts;
+      PRECISION2* in = out + PAD(npts);
 
-      PRECISION2* gcf = (PRECISION2*)malloc(sizeof(PRECISION2*)*GCF_DIM*GCF_DIM);
+      PRECISION2* gcf = (PRECISION2*)malloc(sizeof(PRECISION2*)*64*GCF_DIM*GCF_DIM);
       init_gcf(gcf, GCF_DIM);
       degridGPU(out, in, npts, img, img_size, gcf, GCF_DIM);
    } else {
@@ -228,7 +254,7 @@ void run_server(int size) {
     int data[TASK_LEN];
     bool waiting;
     memset(token_list, 0, sizeof(token*)*256);
-    sleep(3);
+    sleep(1);
     //Initialize
     //rankprintf("Initialized rank %d\n", rank);
     MPI_Recv(port1, MPI_MAX_PORT_NAME, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &status);
@@ -348,7 +374,6 @@ class taskQueue {
       return q; 
    }
    bool done() {
-      int q=0;
       //rankprintf("last_snt = %d\n", last_sent);
       if (-1 == last_sent) return true;
       //task_list[last_sent].display();
@@ -423,14 +448,14 @@ void run_client(int size) {
   //Create and fill two queues
   taskQueue q1(comm1);
   taskQueue q2(comm2);
-  q1.append(task(TASK_GENVIS, 45, 1));
-  q1.append(task(TASK_GENIMG, 46, 1));
-  //q1.append(task(TASK_DEGRID, 45, 46));
-  q2.append(task(TASK_GENVIS, 47, 2));
-  q2.append(task(TASK_GENIMG, 48, 2));
-  //q2.append(task(TASK_DEGRID, 47, 48));
+  q1.append(task(TASK_GENVIS, 45, NPOINTS));
+  q1.append(task(TASK_GENIMG, 46, IMG_SIZE));
+  q1.append(task(TASK_DEGRID, 45, 46));
+  q2.append(task(TASK_GENVIS, 47, NPOINTS));
+  q2.append(task(TASK_GENIMG, 48, IMG_SIZE));
+  q2.append(task(TASK_DEGRID, 47, 48));
 
-  //Submit tasks until queues are empty
+  //Submit tasks until both queues are empty
   while (!(q1.empty() && q2.empty())) {
      if (q1.done() && !q1.empty()) q1.send_next();
      if (q2.done() && !q2.empty()) q2.send_next();
@@ -444,9 +469,8 @@ void run_client(int size) {
   rankprintf("Closing\n");
   //Close connections
   data = INT_MAX;
-  MPI_Send(&data, 1, MPI_INT, 0, 0, comm2);
-  sleep(2);
   MPI_Send(&data, 1, MPI_INT, 0, 0, comm1);
+  MPI_Send(&data, 1, MPI_INT, 0, 0, comm2);
 
   MPI_Comm_disconnect(&comm1);
   MPI_Comm_disconnect(&comm2);
@@ -465,6 +489,26 @@ int main( int argc, char *argv[] )
     sprintf(filename, "log%d.txt", rank);
     logfid = fopen(filename,"a");
     rankprintf("rank %d of %d\n", rank, size);
+    if (1 == size) {
+      //Run just one degrid 
+      // For testing
+      memset(token_list, 0, sizeof(token*)*256);
+      int data[3];
+      data[0] = TASK_GENVIS;
+      data[1] = 45;
+      data[2] = NPOINTS;
+      exec_task(data);
+      data[0] = TASK_GENIMG;
+      data[1] = 46;
+      data[2] = IMG_SIZE;
+      exec_task(data);
+      data[0] = TASK_DEGRID;
+      data[1] = 45;
+      data[2] = 46;
+      exec_task(data);
+      rankprintf("All tasks complete\n");
+      return 0;
+    }
     if (size < 3)
     {
         rankprintf("Three processes needed to run this test.\n");fflush(stdout);
