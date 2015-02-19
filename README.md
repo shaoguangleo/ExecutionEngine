@@ -14,3 +14,8 @@ Then, make sure mpic++ is in your path and invoke 'make'
 Use mpirun with 3 ranks
 
 %> mpirun -N 3 -n 3 ./EEngine
+
+*Trouble-shooting*
+
+- "no rule to make GPUDegrid/degrid_gpu.cu required by degrid_gpu.o"
+   You most likely didnt clone GPUDegrid. See above under "Build"
