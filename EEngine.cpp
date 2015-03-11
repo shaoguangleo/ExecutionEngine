@@ -16,6 +16,7 @@
 #include "math.h"  //exp
 #include "GPUDegrid/degrid_gpu.cuh"
 #include "Defines.h"
+#include "GPUDebug.h"
 
 typedef struct {float x,y;} float2;
 typedef struct {double x,y;} double2;
@@ -144,7 +145,11 @@ const char* task_name(int task_in) {
      case (TASK_KILLTOK): return "TASK_KILLTOK";
      case (TASK_GENVIS): return "TASK_GENVIS";
      case (TASK_GENIMG): return "TASK_GENIMG";
+<<<<<<< .merge_file_AsEYm4
      default: return "UNKNOWN TASK";
+=======
+     default: return "UNKNOWN";
+>>>>>>> .merge_file_8UBSf5
    };
 }
 void* exec_task(void* msg_in) {
@@ -216,11 +221,11 @@ void* exec_task(void* msg_in) {
       // msg[1] : visibility tokenid
       // msg[2] : image tokenid 
       int vistok=0, imgtok=0;
-      while(token_list[vistok]->tid != msg[1]) vistok++;
+      while(token_list[vistok]->tid != msg[1] && vistok<500) vistok++;
       if (token_list[vistok]->token_type != TOKEN_VIS) 
                 throw_error("First token passed to degrid "
                             "does not contain visibilities");
-      while(token_list[imgtok]->tid != msg[2]) imgtok++;
+      while(token_list[imgtok]->tid != msg[2]&& imgtok<500) imgtok++;
       if (token_list[imgtok]->token_type != TOKEN_IMG) 
                 throw_error("Second token passed to degrid "
                             "is not an image");
@@ -262,6 +267,9 @@ void run_server(int size) {
     //rankprintf("Rec'd port1: %s\n", port1);
     MPI_Comm_connect(port1, MPI_INFO_NULL, 0, MPI_COMM_SELF, &comm1);
     //rankprintf("Connected port1: %s\n", port1);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    debugMark(0);
     pthread_mutex_init(&lock, NULL);
 
     //Receive tasks
@@ -367,9 +375,11 @@ class taskQueue {
          throw_error("No task");
          return -1;
       }
+      debugMark(1);
       send_task(this_comm, task_list[q].task_msg[0],
                            task_list[q].task_msg[1],
                            task_list[q].task_msg[2]);
+      debugMark(2);
       task_list[q].sent = true;
       last_sent = q;
       return q; 
@@ -418,8 +428,9 @@ void run_client(int size) {
   MPI_Comm_accept(port1, MPI_INFO_NULL, 0, MPI_COMM_SELF, &comm1);
   MPI_Close_port(port1);
   MPI_Close_port(port2);
+  MPI_Barrier(MPI_COMM_WORLD);
+  debugMark(0);
 
-  sleep(2);
   //Ping both nodes
   data = MSG_CHECK;
   MPI_Send(&data, 1, MPI_INT, 0, 0, comm1);
