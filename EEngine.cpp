@@ -145,11 +145,7 @@ const char* task_name(int task_in) {
      case (TASK_KILLTOK): return "TASK_KILLTOK";
      case (TASK_GENVIS): return "TASK_GENVIS";
      case (TASK_GENIMG): return "TASK_GENIMG";
-<<<<<<< .merge_file_AsEYm4
-     default: return "UNKNOWN TASK";
-=======
      default: return "UNKNOWN";
->>>>>>> .merge_file_8UBSf5
    };
 }
 void* exec_task(void* msg_in) {
