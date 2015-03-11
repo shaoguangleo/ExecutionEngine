@@ -68,7 +68,7 @@ FILE* logfid;
 typedef struct {
    int tid;
    int token_type; //TOKEN_VIS or TOKEN_IMG
-   size_t size;
+   int size;
    void* data;
    int on_rank;
    void display() {
@@ -144,6 +144,7 @@ const char* task_name(int task_in) {
      case (TASK_KILLTOK): return "TASK_KILLTOK";
      case (TASK_GENVIS): return "TASK_GENVIS";
      case (TASK_GENIMG): return "TASK_GENIMG";
+     default: return "UNKNOWN TASK";
    };
 }
 void* exec_task(void* msg_in) {
