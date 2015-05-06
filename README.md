@@ -4,6 +4,7 @@ Simple execution engine for testing SDP data flow with GPUs
 Requires MPI (any).
 Requires pthreads
 Requires GPUDegrid
+Requires c++11 compatible compiler (i.e. gcc 4.8, PGI 15)
 
 *Build*
 This now requires code from GPUDegrid. In the build directory invoke
